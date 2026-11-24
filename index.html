@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>다중 반 동아리·활동 출결 대조기</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+    body { margin: 0; padding: 24px; background: #f4f6f9; color: #222; }
+    .container { max-width: 1280px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 24px; color: #1a365d; }
+    .subtitle { margin: 0 0 20px; color: #555; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: #2b4c7e; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+    .drop-zone { border: 2px dashed #90b4e8; border-radius: 8px; padding: 22px; text-align: center; background: #f8fbff; cursor: pointer; transition: 0.2s; }
+    .drop-zone.dragover { background: #e6f0ff; border-color: #2b6cb0; }
+    .file-list { margin-top: 12px; max-height: 200px; overflow-y: auto; }
+    .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+    .file-item span.fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item input.class-input { width: 85px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; }
+    .file-item button { background: #fff; border: 1px solid #e53e3e; color: #e53e3e; border-radius: 4px; cursor: pointer; padding: 2px 7px; font-size: 12px; }
+    textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; line-height: 1.5; resize: vertical; }
+    .hint { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.4; }
+    .periods { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .periods label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; background: #f1f5f9; padding: 4px 9px; border-radius: 15px; cursor: pointer; }
+    .options-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 10px; font-size: 13px; }
+    .btn-bar { display: flex; gap: 10px; justify-content: center; margin: 18px 0; }
+    .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-excel { background: #16a34a; color: #fff; }
+    .btn-excel:hover { background: #15803d; }
+    .btn-excel:disabled { background: #9ca3af; cursor: not-allowed; }
+    .summary-badges { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .s-badge { padding: 8px 14px; border-radius: 8px; font-size: 14px; font-weight: bold; }
+    .s-red { background: #fee2e2; color: #991b1b; }
+    .s-yellow { background: #fef3c7; color: #92400e; }
+    .s-green { background: #dcfce7; color: #166534; }
+    .table-wrap { overflow-x: auto; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #cbd5e1; padding: 7px 9px; text-align: center; vertical-align: middle; }
+    th { background: #f1f5f9; font-weight: bold; white-space: nowrap; }
+    td.left { text-align: left; }
+    .cell-check { background: #fee2e2; color: #b91c1c; font-weight: bold; }
+    .cell-other { background: #fef9c3; color: #854d0e; }
+    .cell-ok { color: #64748b; }
+    .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .tag-check { background: #dc2626; color: #fff; }
+    .tag-other { background: #d97706; color: #fff; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+    .tab-btn { padding: 8px 16px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+    .tab-btn.active { background: #1e40af; color: #fff; border-color: #1e40af; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>나이스 출결 ↔ 활동 참여 여부 대조기 (다중 반 지원)</h1>
+  <p class="subtitle">반별 나이스 일일출결현황 엑셀 파일을 올리면 병합 셀을 자동 복원하여 활동 날짜·교시와 대조합니다. (모든 데이터는 브라우저 로컬에서만 처리되며 외부 서버로 전송되지 않습니다)</p>
+
+  <div class="grid">
+    <!-- 1. 엑셀 업로드 -->
+    <div class="card">
+      <h2>1. 반별 출결 엑셀 파일 올리기 (여러 개 가능)</h2>
+      <div id="dropZone" class="drop-zone">
+        여기를 클릭하거나 반별 엑셀 파일(.xlsx, .xls, .csv)을 끌어다 놓으세요
+        <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv" style="display:none" />
+      </div>
+      <div id="fileList" class="file-list"></div>
+      <div class="hint">• 파일명에 반 이름이 있으면(예: 1반_출결.xlsx, 2-3.xlsx) 자동 입력되며 직접 수정 가능합니다.<br>• 나이스 병합 셀(연속 출결 학생)을 자동으로 채워서 읽습니다.</div>
+    </div>
+
+    <!-- 2. 활동 날짜 및 교시 -->
+    <div class="card">
+      <h2>2. 확인할 날짜 및 활동 교시 설정</h2>
+      <textarea id="datesInput" rows="4" placeholder="확인할 날짜를 줄바꿈이나 쉼표로 입력하세요.&#10;예)&#10;2026.09.01&#10;2026-09-10, 2026-09-14&#10;2026.09.28."></textarea>
+      <div style="margin-top:10px; font-size:13px; font-weight:bold;">활동 교시 선택 <span style="font-weight:normal; color:#666;">(체크 안 하면 교시 무관 전체 확인)</span></div>
+      <div class="periods" id="periodsBox">
+        <label><input type="checkbox" value="조회">조회</label>
+        <label><input type="checkbox" value="1교시">1교시</label>
+        <label><input type="checkbox" value="2교시">2교시</label>
+        <label><input type="checkbox" value="3교시">3교시</label>
+        <label><input type="checkbox" value="4교시">4교시</label>
+        <label><input type="checkbox" value="5교시">5교시</label>
+        <label><input type="checkbox" value="6교시">6교시</label>
+        <label><input type="checkbox" value="7교시">7교시</label>
+        <label><input type="checkbox" value="종례">종례</label>
+      </div>
+      <div class="options-row">
+        <label><input type="checkbox" id="showOtherPeriod" checked> 활동 교시와 안 겹치는 출결(예: 조회 지각)도 '타교시 참고'로 표시</label>
+      </div>
+    </div>
+
+    <!-- 3. 대상 학생 명단 -->
+    <div class="card">
+      <h2>3. 대상 학생 명단 입력 (엑셀 복붙 가능)</h2>
+      <textarea id="studentsInput" rows="7" placeholder="엑셀에서 복사해 붙여넣거나 한 줄에 한 명씩 입력하세요.&#10;[반 / 번호 / 성명] 또는 [반 / 성명] 또는 [성명]&#10;예)&#10;1반	15	유다연&#10;1반	29	홍지율&#10;2반	3	김철수"></textarea>
+      <div class="options-row">
+        <label><input type="radio" name="matchMode" value="class_name" checked> 반 + 성명으로 대조 (동명이인 방지, 반 미입력 시 전체 검색)</label>
+        <label><input type="radio" name="matchMode" value="name_only"> 성명만으로 대조 (단일 반이거나 반 구분 불필요 시)</label>
+      </div>
+      <div class="hint">• 출결 파일 목록의 '반' 표기(예: 1반)와 명단의 '반' 표기(예: 1 또는 1반)는 자동으로 맞춰집니다.</div>
+    </div>
+  </div>
+
+  <div class="btn-bar">
+    <button class="btn btn-primary" type="button" onclick="runCompare()">출결 대조 실행하기</button>
+    <button class="btn btn-excel" type="button" id="downloadBtn" onclick="downloadExcel()" disabled>결과 엑셀(.xlsx) 다운로드</button>
+  </div>
+
+  <!-- 결과 영역 -->
+  <div id="resultCard" class="card hidden">
+    <h2>대조 결과</h2>
+    <div id="summaryBadges" class="summary-badges"></div>
+    <div class="tabs">
+      <button class="tab-btn active" type="button" onclick="switchTab('matrix', this)">전체 표로 보기 (학생 × 날짜)</button>
+      <button class="tab-btn" type="button" onclick="switchTab('details', this)">확인필요 목록만 모아보기</button>
+    </div>
+    <div id="matrixTab" class="table-wrap"></div>
+    <div id="detailsTab" class="table-wrap hidden"></div>
+  </div>
+</div>
+
+<script>
+  const uploadedFiles = []; // { id, fileName, className, records }
+  let lastResult = null;
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', e => {
+    handleFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  function guessClassName(filename) {
+    const base = filename.replace(/\.[^.]+$/, '');
+    const m1 = base.match(/(\d+\s*[-학년]\s*\d+\s*반?)/);
+    if (m1) return normalizeClass(m1[1]);
+    const m2 = base.match(/(\d+\s*반)/);
+    if (m2) return normalizeClass(m2[1]);
+    return '';
+  }
+
+  function normalizeClass(val) {
+    const s = String(val || '').trim().replace(/\s+/g, '');
+    if (!s) return '';
+    const mGrade = s.match(/^0*(\d+)학년0*(\d+)반?$/);
+    if (mGrade) return `${Number(mGrade[1])}-${Number(mGrade[2])}`;
+    const mDash = s.match(/^0*(\d+)-0*(\d+)반?$/);
+    if (mDash) return `${Number(mDash[1])}-${Number(mDash[2])}`;
+    const mBan = s.match(/^0*(\d+)반?$/);
+    if (mBan) return `${Number(mBan[1])}반`;
+    return s;
+  }
+
+  function normalizeDate(val, fallbackYear) {
+    if (val === null || val === undefined || val === '') return '';
+    if (typeof val === 'number' && val > 20000 && val < 90000) {
+      const d = XLSX.SSF.parse_date_code(val);
+      if (d && d.y && d.m && d.d) {
+        return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+      }
+    }
+    const s = String(val).trim();
+    const mFull = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (mFull) {
+      return `${mFull[1]}-${mFull[2].padStart(2, '0')}-${mFull[3].padStart(2, '0')}`;
+    }
+    const mShort = s.match(/^(\d{1,2})\D+(\d{1,2})\.?$/);
+    if (mShort && fallbackYear) {
+      return `${fallbackYear}-${mShort[1].padStart(2, '0')}-${mShort[2].padStart(2, '0')}`;
+    }
+    return '';
+  }
+
+  function parsePeriods(str) {
+    return String(str || '')
+      .split(/[,/\s]+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+      .map(t => (/^\d+$/.test(t) ? `${t}교시` : t));
+  }
+
+  function sheetToMatrixWithMerges(ws) {
+    if (!ws['!ref']) return [];
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const rows = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const row = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (!cell) {
+          row.push('');
+        } else if (cell.t === 'n' && cell.z && /[ymd]/i.test(cell.z) && cell.v > 20000) {
+          row.push(normalizeDate(cell.v));
+        } else {
+          row.push(cell.w !== undefined ? String(cell.w).trim() : String(cell.v ?? '').trim());
+        }
+      }
+      rows.push(row);
+    }
+    const merges = ws['!merges'] || [];
+    for (const m of merges) {
+      const sr = m.s.r - range.s.r, sc = m.s.c - range.s.c;
+      const er = m.e.r - range.s.r, ec = m.e.c - range.s.c;
+      const topLeft = (rows[sr] && rows[sr][sc] !== undefined) ? rows[sr][sc] : '';
+      for (let r = sr; r <= er; r++) {
+        for (let c = sc; c <= ec; c++) {
+          if (rows[r] && (rows[r][c] === '' || rows[r][c] === undefined)) {
+            rows[r][c] = topLeft;
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
+  function parseAttendanceWorkbook(wb) {
+    const allRecords = [];
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      const matrix = sheetToMatrixWithMerges(ws);
+      if (matrix.length === 0) continue;
+
+      let headerIdx = 0;
+      const colMap = { date: 0, num: 1, name: 2, type: 3, period: 4, reason: 5 };
+      for (let r = 0; r < Math.min(10, matrix.length); r++) {
+        const row = matrix[r].map(v => String(v).replace(/\s+/g, ''));
+        if (row.includes('일자') && row.includes('성명')) {
+          headerIdx = r;
+          colMap.date = row.indexOf('일자');
+          colMap.num = row.indexOf('번호') >= 0 ? row.indexOf('번호') : 1;
+          colMap.name = row.indexOf('성명');
+          colMap.type = row.indexOf('출결구분') >= 0 ? row.indexOf('출결구분') : 3;
+          colMap.period = row.indexOf('결시교시') >= 0 ? row.indexOf('결시교시') : 4;
+          colMap.reason = row.indexOf('사유') >= 0 ? row.indexOf('사유') : 5;
+          break;
+        }
+      }
+
+      let prevDate = '', prevNum = '', prevName = '';
+      for (let r = headerIdx + 1; r < matrix.length; r++) {
+        const row = matrix[r];
+        let date = normalizeDate(row[colMap.date]);
+        let num = String(row[colMap.num] ?? '').trim();
+        let name = String(row[colMap.name] ?? '').trim();
+        const type = String(row[colMap.type] ?? '').trim();
+        const period = String(row[colMap.period] ?? '').trim().replace(/,+$/, '');
+        const reason = String(row[colMap.reason] ?? '').trim();
+
+        if (!date && !name && !type) continue;
+        if (!date && type) date = prevDate;
+        if (!name && (date || type)) { name = prevName; num = num || prevNum; }
+
+        if (date) prevDate = date;
+        if (name) { prevName = name; prevNum = num; }
+
+        if (date && name) {
+          allRecords.push({ date, num, name, type, period, reason, sheetName });
+        }
+      }
+    }
+    return allRecords;
+  }
+
+  async function handleFiles(files) {
+    for (const file of files) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+      const records = parseAttendanceWorkbook(wb);
+      uploadedFiles.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        fileName: file.name,
+        className: guessClassName(file.name),
+        records
+      });
+    }
+    renderFileList();
+  }
+
+  function renderFileList() {
+    const el = document.getElementById('fileList');
+    if (uploadedFiles.length === 0) {
+      el.innerHTML = '';
+      return;
+    }
+    el.innerHTML = uploadedFiles.map(f => `
+      <div class="file-item" data-id="${f.id}">
+        <span class="fname" title="${escapeHtml(f.fileName)}">${escapeHtml(f.fileName)} (${f.records.length}건)</span>
+        <input class="class-input" type="text" placeholder="반(예:1반)" value="${escapeHtml(f.className)}" />
+        <button type="button" class="del-btn">삭제</button>
+      </div>
+    `).join('');
+
+    el.querySelectorAll('.file-item').forEach(item => {
+      const id = item.getAttribute('data-id');
+      const input = item.querySelector('.class-input');
+      const delBtn = item.querySelector('.del-btn');
+
+      input.addEventListener('change', () => {
+        const target = uploadedFiles.find(x => x.id === id);
+        if (target) {
+          target.className = normalizeClass(input.value);
+          input.value = target.className;
+        }
+      });
+
+      delBtn.addEventListener('click', () => {
+        const idx = uploadedFiles.findIndex(x => x.id === id);
+        if (idx >= 0) {
+          uploadedFiles.splice(idx, 1);
+          renderFileList();
+        }
+      });
+    });
+  }
+
+  function parseTargetDates(fallbackYear) {
+    const raw = document.getElementById('datesInput').value;
+    const tokens = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    const dates = [];
+    for (const t of tokens) {
+      const d = normalizeDate(t, fallbackYear);
+      if (d && !dates.includes(d)) dates.push(d);
+    }
+    return dates.sort();
+  }
+
+  function parseStudents() {
+    const raw = document.getElementById('studentsInput').value;
+    const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const students = [];
+    for (const line of lines) {
+      const cols = line.split(/[\t,]+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+      if (cols.length === 0) continue;
+      if (cols.some(c => c === '성명' || c === '이름') && (cols.includes('반') || cols.includes('번호') || cols.length === 1)) continue;
+
+      let className = '', num = '', name = '';
+      if (cols.length >= 3) {
+        className = normalizeClass(cols[0]);
+        num = cols[1];
+        name = cols[2];
+      } else if (cols.length === 2) {
+        if (/반|-|학년/.test(cols[0])) {
+          className = normalizeClass(cols[0]);
+        } else if (/^\d+$/.test(cols[0])) {
+          num = cols[0];
+        } else {
+          className = normalizeClass(cols[0]);
+        }
+        name = cols[1];
+      } else {
+        const sp = cols[0].split(/\s+/);
+        if (sp.length >= 3) {
+          className = normalizeClass(sp[0]); num = sp[1]; name = sp[2];
+        } else if (sp.length === 2) {
+          if (/반|-|학년/.test(sp[0])) className = normalizeClass(sp[0]);
+          else num = sp[0];
+          name = sp[1];
+        } else {
+          name = sp[0];
+        }
+      }
+      if (name) students.push({ className, num, name });
+    }
+    return students;
+  }
+
+  function checkOverlap(selectedPeriods, rec) {
+    if (selectedPeriods.length === 0) return true;
+    if (rec.type.includes('결석')) return true;
+    const missed = parsePeriods(rec.period);
+    if (missed.length === 0) return true;
+    return selectedPeriods.some(p => missed.includes(p));
+  }
+
+  function runCompare() {
+    if (uploadedFiles.length === 0) return alert('출결 엑셀 파일을 먼저 올려주세요.');
+
+    const firstRec = uploadedFiles.flatMap(f => f.records)[0];
+    const fallbackYear = firstRec ? firstRec.date.slice(0, 4) : String(new Date().getFullYear());
+
+    const dates = parseTargetDates(fallbackYear);
+    if (dates.length === 0) return alert('확인할 날짜를 1개 이상 입력해주세요.');
+
+    const students = parseStudents();
+    if (students.length === 0) return alert('대상 학생 명단을 입력해주세요.');
+
+    const selectedPeriods = Array.from(document.querySelectorAll('#periodsBox input:checked')).map(el => el.value);
+    const showOther = document.getElementById('showOtherPeriod').checked;
+    const matchMode = document.querySelector('input[name="matchMode"]:checked').value;
+
+    const allRecords = [];
+    for (const f of uploadedFiles) {
+      const cls = normalizeClass(f.className);
+      for (const r of f.records) {
+        allRecords.push({ ...r, className: cls });
+      }
+    }
+
+    let checkCount = 0;
+    let otherCount = 0;
+    const detailRows = [];
+
+    const matrixRows = students.map(st => {
+      const cells = dates.map(d => {
+        const matched = allRecords.filter(r => {
+          if (r.date !== d) return false;
+          if (r.name !== st.name) return false;
+          if (matchMode === 'class_name' && st.className && r.className) {
+            if (st.className !== r.className) return false;
+          }
+          if (st.num && r.num && String(Number(st.num)) !== String(Number(r.num)) && !isNaN(st.num) && !isNaN(r.num)) {
+            return false;
+          }
+          return true;
+        });
+
+        if (matched.length === 0) return { status: 'ok', records: [] };
+
+        const overlapped = matched.filter(r => checkOverlap(selectedPeriods, r));
+        if (overlapped.length > 0) {
+          checkCount++;
+          overlapped.forEach(r => detailRows.push({ status: '확인필요', st, ...r }));
+          return { status: 'check', records: overlapped };
+        } else {
+          if (showOther) {
+            otherCount++;
+            matched.forEach(r => detailRows.push({ status: '타교시참고', st, ...r }));
+            return { status: 'other', records: matched };
+          }
+          return { status: 'ok', records: [] };
+        }
+      });
+      return { st, cells };
+    });
+
+    lastResult = { dates, matrixRows, detailRows, selectedPeriods };
+    renderResult(checkCount, otherCount);
+  }
+
+  function renderResult(checkCount, otherCount) {
+    const { dates, matrixRows, detailRows } = lastResult;
+    document.getElementById('resultCard').classList.remove('hidden');
+    document.getElementById('downloadBtn').disabled = false;
+
+    document.getElementById('summaryBadges').innerHTML = `
+      <div class="s-badge s-red">확인필요: ${checkCount}건</div>
+      <div class="s-badge s-yellow">타교시 출결 참고: ${otherCount}건</div>
+      <div class="s-badge s-green">대상 학생: ${matrixRows.length}명 / 확인 날짜: ${dates.length}일</div>
+    `;
+
+    let mHtml = `<table><thead><tr><th>반</th><th>번호</th><th>성명</th>`;
+    for (const d of dates) mHtml += `<th>${escapeHtml(d)}</th>`;
+    mHtml += `</tr></thead><tbody>`;
+
+    for (const row of matrixRows) {
+      mHtml += `<tr><td>${escapeHtml(row.st.className || '-')}</td><td>${escapeHtml(row.st.num || '-')}</td><td><strong>${escapeHtml(row.st.name)}</strong></td>`;
+      for (const c of row.cells) {
+        if (c.status === 'check') {
+          const text = c.records.map(r => `확인필요<br><small>${escapeHtml(r.type)} (${escapeHtml(r.period || '교시미상')})</small>`).join('<hr style="margin:3px 0">');
+          const title = c.records.map(r => `[${r.className}] ${r.type} | ${r.period} | 사유: ${r.reason}`).join('\n');
+          mHtml += `<td class="cell-check" title="${escapeHtml(title)}">${text}</td>`;
+        } else if (c.status === 'other') {
+          const text = c.records.map(r => `타교시<br><small>${escapeHtml(r.type)} (${escapeHtml(r.period)})</small>`).join('<hr style="margin:3px 0">');
+          const title = c.records.map(r => `[${r.className}] ${r.type} | ${r.period} | 사유: ${r.reason}`).join('\n');
+          mHtml += `<td class="cell-other" title="${escapeHtml(title)}">${text}</td>`;
+        } else {
+          mHtml += `<td class="cell-ok">-</td>`;
+        }
+      }
+      mHtml += `</tr>`;
+    }
+    mHtml += `</tbody></table>`;
+    document.getElementById('matrixTab').innerHTML = mHtml;
+
+    if (detailRows.length === 0) {
+      document.getElementById('detailsTab').innerHTML = `<p style="padding:16px; color:#166534;">일치하는 결석/지각/조퇴/결과 기록이 없습니다.</p>`;
+    } else {
+      let dHtml = `<table><thead><tr><th>판정</th><th>일자</th><th>반</th><th>번호</th><th>성명</th><th>출결구분</th><th>결시교시</th><th>사유</th></tr></thead><tbody>`;
+      for (const r of detailRows) {
+        const badge = r.status === '확인필요' ? `<span class="tag tag-check">확인필요</span>` : `<span class="tag tag-other">타교시참고</span>`;
+        dHtml += `<tr>
+          <td>${badge}</td>
+          <td>${escapeHtml(r.date)}</td>
+          <td>${escapeHtml(r.className || r.st.className || '-')}</td>
+          <td>${escapeHtml(r.num || r.st.num || '-')}</td>
+          <td><strong>${escapeHtml(r.name)}</strong></td>
+          <td>${escapeHtml(r.type)}</td>
+          <td class="left">${escapeHtml(r.period)}</td>
+          <td class="left">${escapeHtml(r.reason)}</td>
+        </tr>`;
+      }
+      dHtml += `</tbody></table>`;
+      document.getElementById('detailsTab').innerHTML = dHtml;
+    }
+  }
+
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('matrixTab').classList.toggle('hidden', tab !== 'matrix');
+    document.getElementById('detailsTab').classList.toggle('hidden', tab !== 'details');
+  }
+
+  function downloadExcel() {
+    if (!lastResult) return;
+    const { dates, matrixRows, detailRows } = lastResult;
+    const wb = XLSX.utils.book_new();
+
+    const aoa1 = [['반', '번호', '성명', ...dates]];
+    for (const row of matrixRows) {
+      const line = [row.st.className || '', row.st.num || '', row.st.name];
+      for (const c of row.cells) {
+        if (c.status === 'check') {
+          line.push(c.records.map(r => `확인필요 (${r.type}: ${r.period}${r.reason ? ' / ' + r.reason : ''})`).join(' | '));
+        } else if (c.status === 'other') {
+          line.push(c.records.map(r => `타교시 (${r.type}: ${r.period})`).join(' | '));
+        } else {
+          line.push('이상없음');
+        }
+      }
+      aoa1.push(line);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa1), '일자별_대조표');
+
+    const aoa2 = [['판정', '일자', '반', '번호', '성명', '출결구분', '결시교시', '사유']];
+    for (const r of detailRows) {
+      aoa2.push([r.status, r.date, r.className || r.st.className || '', r.num || r.st.num || '', r.name, r.type, r.period, r.reason]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa2), '확인필요_상세목록');
+
+    XLSX.writeFile(wb, `출결대조결과_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+</script>
+</body>
+</html>
+```[cite: 1]
+
+---
+
+### 3. GitHub에 올리는 방법 (간단 요약)
+1. GitHub에서 새 저장소(예: `attendance-checker`)를 만듭니다.
+2. 위 코드를 `index.html` 이름으로 저장한 뒤 저장소에 업로드합니다(웹에서 *Add file → Upload files* 또는 `git push`).
+3. 웹으로 바로 쓰려면 저장소의 **Settings → Pages**에서 Branch를 `main` (루트 `/`)으로 설정하고 저장하면 생성되는 주소로 접속해 사용할 수 있습니다.
+
+GitHub Pages 배포용 `README.md`도 함께 만들어 드릴까요?
